@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Zertifikat Checker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        #CertificateInfo {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-top: 30px;
+        }
+        .user-block {
+            margin-bottom: 10px;
+        }
+        .user-column {
+            flex: 1;
+            min-width: 250px;
+            background: #222;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+        }
+        .user-column h4 {
+            margin-top: 0;
+            color: #0f0;
+        }
+    </style>
+</head>
+<body>
+
+    <h2>Zertifikat Checker</h2>
+    <form id="inputForm">
+        <label>Start Teilnehmernummer: <input type="text" id="baseNum" required></label><br><br>
+        <label>Teilnehmer Count (Range): <input type="number" id="rangeCount" required></label><br><br>
+
+        <div id="userInputs">
+            <h3>Teilnehmer</h3>
+            <div class="user-block">
+                Name: <input type="text" class="name" required>
+                Geburtsdatum (dd.mm.yyyy): <input type="text" class="birth" required>
+            </div>
+        </div>
+        <button type="button" onclick="addUser()">Add Another Teilnehmer</button><br><br>
+        <button type="submit">Start Checking</button>
+    </form>
+
+    <hr>
+
+    <div id="CertificateInfo"></div>
+
+    <script>
+        let itteration = 0;
+
+        function addUser() {
+            const container = document.getElementById('userInputs');
+            const userBlock = document.createElement('div');
+            userBlock.className = 'user-block';
+            userBlock.innerHTML = `
+                Name: <input type="text" class="name" required>
+                Geburtsdatum (dd.mm.yyyy): <input type="text" class="birth" required>
+            `;
+            container.appendChild(userBlock);
+        }
+
+        async function sendRequest(teilnehmernummer, user, containerId) {
+            try {
+                const response = await fetch('https://api.resuls-telc.net/api/v1/find', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        "teilnehmernummer": teilnehmernummer,
+                        "geburtdatum": user.geburtdatum,
+                        "datum_der_aussteilung": "16.04.2025"
+                    })
+                });
+
+                const data = await response.json();
+                ++itteration;
+
+                const container = document.getElementById(containerId);
+                const message = `${data.detail} für Teilnehmernummer: ${teilnehmernummer}`;
+                const color = data.detail.includes("nicht gefunden") ? "red" : "lightgreen";
+
+                container.innerHTML += `<span style="color: ${color};">${message}</span><br>`;
+            } catch (error) {
+                console.error('Error:', error);
+            }
+        }
+
+        async function checkForUser(user, baseString, range, containerId) {
+            const baseInt = parseInt(baseString, 10);
+            const length = baseString.length;
+
+            const start = baseInt - range;
+            const end = baseInt + range;
+
+            for (let i = start; i <= end; i++) {
+                const paddedNum = i.toString().padStart(length, '0');
+                await sendRequest(paddedNum, user, containerId);
+            }
+        }
+
+        document.getElementById('inputForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            // Clear previous results
+            document.getElementById('CertificateInfo').innerHTML = '';
+
+            const baseNumStr = document.getElementById('baseNum').value.trim();
+            const rangeCount = parseInt(document.getElementById('rangeCount').value);
+
+            const users = Array.from(document.querySelectorAll('.user-block')).map((block, index) => {
+                const name = block.querySelector('.name').value.trim();
+                const geburtdatum = block.querySelector('.birth').value.trim();
+                const id = `user_${index}`;
+
+                const userDiv = document.createElement('div');
+                userDiv.id = id;
+                userDiv.className = 'user-column';
+                userDiv.innerHTML = `<h4>${name}</h4>`;
+                document.getElementById('CertificateInfo').appendChild(userDiv);
+
+                return { name, geburtdatum, containerId: id };
+            });
+
+            for (const user of users) {
+                await checkForUser(user, baseNumStr, rangeCount, user.containerId);
+            }
+
+            const total = document.createElement('div');
+            total.className = 'user-column';
+            total.innerHTML = `<h4>Info</h4><strong>Total Requests Made: ${itteration}</strong>`;
+            document.getElementById('CertificateInfo').appendChild(total);
+        });
+    </script>
+
+</body>
+</html>
